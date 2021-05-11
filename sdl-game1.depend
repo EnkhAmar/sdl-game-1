@@ -1,0 +1,9 @@
+# depslib dependency file v1.0
+1620711768 source:/home/enkh-amar/amaraa/num/datastructures/sdl-game1/main.c
+	<stdio.h>
+	<stdlib.h>
+	<stdbool.h>
+	<time.h>
+	<math.h>
+	<SDL2/SDL.h>
+
