@@ -1,5 +1,7 @@
 // KEYCODE: https://wiki.libsdl.org/SDL_Keycode
-// KEYBOARD STATE: https://wiki.libsdl.org/SDL_GetKeyboardState
+// KEYBOARD STATE: https://wiki.libsdl.org/SDL_GetKeyboardState\
+// SDL rectangle: https://wiki.libsdl.org/SDL_Rect
+// FREE AUDIO: https://sfxr.me/
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -8,15 +10,16 @@
 #include <math.h>
 
 #include <SDL2/SDL.h>
+#include <SDL2/SDL_mixer.h>
 
-const int WIDTH = 640;   //800;
-const int HEIGHT = 480;   //600;
+const int WIDTH = 800;
+const int HEIGHT = 600;
 const int BALL_SIZE = 10;
 float SPEED = 120;
 const int PLAYER_WIDTH = 20;
 const int PLAYER_HEIGHT = 75;
 const int PLAYER_MARGIN = 10;
-const float PLAYER_MOVE_SPEED = 150.0f;
+const float PLAYER_MOVE_SPEED = 550.0f;
 
 typedef struct Ball {
     float x;
@@ -39,6 +42,11 @@ Player player2;
 
 SDL_Window *window = NULL;
 SDL_Renderer *renderer = NULL;
+
+Mix_Music *backgroundSound = NULL;
+Mix_Chunk *bounceWallEffect = NULL;
+Mix_Chunk *bounceBoardEffect = NULL;
+Mix_Chunk *pointEffect = NULL;
 
 
 bool Initialize(void);
@@ -86,6 +94,16 @@ int main(int argc, char* argv[])
             }
         }
 
+        SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
+        SDL_Rect midLine = {
+            .x = WIDTH / 2 - BALL_SIZE / 5,
+            .y = 0,
+            .w = 2 * BALL_SIZE / 5,
+            .h = HEIGHT,
+        };
+        SDL_RenderFillRect(renderer, &midLine);
+        SDL_RenderPresent(renderer);
+
         Uint32 curTick = SDL_GetTicks();
         Uint32 diff = curTick - lastTick;
         float elapsed = diff / 1000.0f;
@@ -102,10 +120,19 @@ bool Initialize(void) {
     printf("G.Enkh-Amar");
     printf("18B1NUM0399");
     // Intialize SDL
-    if (SDL_Init(SDL_INIT_VIDEO) != 0) {
-        fprintf(stderr, "Failed to intialize SDL: %s\n", SDL_GetError());
+    if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO) != 0) {
         return false;
     };
+
+    // Intialize SDL Mixer
+    Mix_OpenAudio(44100, MIX_DEFAULT_FORMAT, 2, 2048);
+
+    // Load audio files
+    backgroundSound = Mix_LoadMUS("background.mp3");
+    bounceWallEffect = Mix_LoadWAV("bounce-wall.wav");
+    bounceBoardEffect = Mix_LoadWAV("bounce-board.wav");
+    pointEffect = Mix_LoadWAV("point.wav");
+
 
     // Create an SDL window
     window = SDL_CreateWindow("Game 1", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, WIDTH, HEIGHT, SDL_WINDOW_OPENGL);
@@ -119,6 +146,9 @@ bool Initialize(void) {
     ball = MakeBall(BALL_SIZE);
     player1 = MakePlayer();
     player2 = MakePlayer();
+
+    // Play background sound
+    Mix_PlayMusic(backgroundSound, -1);
 
     return true;
 }
@@ -141,17 +171,22 @@ void Shutdown(void) {
         SDL_DestroyRenderer(renderer);
     if (window)
         SDL_DestroyWindow(window);
+    Mix_FreeMusic(backgroundSound);
+    Mix_FreeChunk(bounceWallEffect);
+    Mix_FreeChunk(bounceBoardEffect);
+    Mix_FreeChunk(pointEffect);
+    Mix_CloseAudio();
     SDL_Quit();
 }
-bool CoinFlip(void) {
+bool GetRandomValue(void) {
     return rand() % 2 == 1 ? true : false;
 }
 Ball MakeBall(int size) {
     Ball ball = {
         .x = WIDTH / 2 - size / 2,
         .y = HEIGHT / 2 - size / 2,
-        .xSpeed = SPEED * (CoinFlip() ? 1 : -1),
-        .ySpeed = SPEED * (CoinFlip() ? 1 : -1),
+        .xSpeed = SPEED * (GetRandomValue() ? 1 : -1),
+        .ySpeed = SPEED * (GetRandomValue() ? 1 : -1),
         .size = size,
     };
     return ball;
@@ -178,23 +213,25 @@ void UpdateBall(Ball *ball, float elapsed) {
     ball->y += ball->ySpeed * elapsed;
 
     if (ball->x < BALL_SIZE / 2) {
-        // returns full absolute value of xSpeed
-        // ball->xSpeed = fabs(ball->xSpeed);
+        Mix_PlayChannel(-1, pointEffect, 0);
         UpdateScore(2, 100);
     }
     if (ball->x > WIDTH - BALL_SIZE / 2) {
-        // ball->xSpeed = -fabs(ball->xSpeed);
+        Mix_PlayChannel(-1, pointEffect, 0);
         UpdateScore(1, 100);
     }
+    // returns full absolute value of xSpeed
     if (ball->y < BALL_SIZE / 2) {
+        Mix_PlayChannel(-1, bounceWallEffect, 0);
         ball->ySpeed = fabs(ball->ySpeed);
     }
     if (ball->y > HEIGHT - BALL_SIZE / 2) {
+        Mix_PlayChannel(-1, bounceWallEffect, 0);
         ball->ySpeed = -fabs(ball->ySpeed);
     }
 
 
-    const Uint8  *state = SDL_GetKeyboardState(NULL);
+    const Uint8 *state = SDL_GetKeyboardState(NULL);
     if (state[SDL_SCANCODE_SPACE]) {
         served = true;
     }
@@ -273,6 +310,7 @@ void UpdatePlayers(float elapsed) {
     };
 
     if (SDL_HasIntersection(&ballRect, &player1Rect)) {
+        Mix_PlayChannel(-1, bounceBoardEffect, 0);
         ball.xSpeed = fabs(ball.xSpeed);
     }
 
@@ -283,13 +321,14 @@ void UpdatePlayers(float elapsed) {
         .h = PLAYER_HEIGHT,
     };
     if  (SDL_HasIntersection(&ballRect, &player2Rect)) {
+        Mix_PlayChannel(-1, bounceBoardEffect, 0);
         ball.xSpeed = -fabs(ball.xSpeed);
     }
 
 }
 void RenderPlayers(void) {
-    // Render Player 1 (left, red)
-    SDL_SetRenderDrawColor(renderer, 255, 0, 0, 255);
+    // Render Player 1
+    SDL_SetRenderDrawColor(renderer, 255, 51, 51, 255);
     SDL_Rect player1Rect = {
         .x = PLAYER_MARGIN,
         .y = (int)(player1.yPosition) - PLAYER_HEIGHT / 2,
@@ -298,8 +337,8 @@ void RenderPlayers(void) {
     };
     SDL_RenderFillRect(renderer, &player1Rect);
 
-    // Render Player 2 (right, left)
-    SDL_SetRenderDrawColor(renderer, 0, 0, 255, 255);
+    // Render Player 2
+    SDL_SetRenderDrawColor(renderer, 102, 178, 255, 255);
     SDL_Rect player2Rect = {
         .x = WIDTH - PLAYER_WIDTH - PLAYER_MARGIN,
         .y = (int)(player2.yPosition) - PLAYER_HEIGHT / 2,

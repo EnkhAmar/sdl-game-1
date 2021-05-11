@@ -7,3 +7,12 @@
 	<math.h>
 	<SDL2/SDL.h>
 
+1620746096 source:d:\education\progamming_c\sdl-game-1\main.c
+	<stdio.h>
+	<stdlib.h>
+	<stdbool.h>
+	<time.h>
+	<math.h>
+	<SDL2/SDL.h>
+	<SDL2/SDL_mixer.h>
+
